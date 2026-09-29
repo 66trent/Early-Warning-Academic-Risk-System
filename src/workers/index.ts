@@ -1,16 +1,8 @@
 import { Worker } from "bullmq";
 import { QUEUE_NAMES, redisConnection } from "../lib/queue";
+import { syncLmsWorker } from "./sync-lms.worker";
 
 console.log("🚀 Starting CTUET-EWARS BullMQ Worker...");
-
-const syncLmsWorker = new Worker(
-  QUEUE_NAMES.SYNC_LMS,
-  async (job) => {
-    console.log(`[sync-lms] Processing job ${job.id}`);
-    return { success: true };
-  },
-  { connection: redisConnection, concurrency: 2 }
-);
 
 const calculateRiskScoreWorker = new Worker(
   QUEUE_NAMES.CALCULATE_RISK_SCORE,

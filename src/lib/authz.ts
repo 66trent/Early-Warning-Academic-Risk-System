@@ -45,6 +45,17 @@ export async function assertScope(
     return;
   }
 
+  // Kiểm tra quyền đối với tài nguyên vận hành ImportBatch
+  if (options.resourceType === "ImportBatch") {
+    if (role !== "TRAINING_OFFICER") {
+      throw new AuthorizationError(
+        "Chỉ cán bộ đào tạo hoặc quản trị viên mới có quyền thao tác với dữ liệu nhập",
+        403
+      );
+    }
+    return;
+  }
+
   // 2. STUDENT: Chỉ được phép truy cập dữ liệu của chính mình
   if (role === "STUDENT") {
     if (options.studentId && options.studentId !== effectiveUserId) {

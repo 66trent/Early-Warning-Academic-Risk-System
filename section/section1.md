@@ -1,6 +1,6 @@
-# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Phiên làm việc 1 (Phase 0)
+# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Hiện trạng Triển khai (Phase 0, 1, 2)
 
-> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong Phiên làm việc 1 (Phase 0). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo.
+> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong các phiên làm việc (Phase 0: Bootstrap Infra, Phase 1: Identity & Catalog, Phase 2: Module Data Import). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo (Phase 3: Rule Engine).
 
 ---
 
@@ -167,10 +167,99 @@ Mọi bảng dữ liệu nguồn (điểm danh, điểm số, bài tập LMS, lo
 
 ---
 
-## 8. Kế hoạch Tiếp theo (Phase 2 — Module `data-import`)
+## 8. Những Việc Đã Hoàn Thành Trong Phase 2 (Module `data-import`)
 
-Khi bắt đầu tiếp tục, thực hiện **Phase 2 — Module `data-import`** theo `implement.md`:
-- Dùng skill `generate-prisma-schema` cho 7 bảng ở `10-data-schema-source-records.md` + 4 bảng ở `12-data-schema-ops.md`.
-- Dùng skill `implement-data-import-source` cho từng loại dữ liệu nguồn (điểm danh, điểm học phần, LMS assignments/submissions/events).
-- UI upload file, xem lịch sử `ImportBatch`, tải dòng lỗi và hủy batch `STAGED`.
-- Job đồng bộ LMS qua BullMQ queue `sync-lms`.
+1. **Schema Prisma & Migration (11 bảng mới):**
+   - **7 bảng dữ liệu nguồn (`10-data-schema-source-records.md`):** `AttendanceRecord`, `AssessmentResult`, `LMSAssignment`, `LMSSubmission`, `LMSDeadlineExtension`, `LMSAssignmentExemption`, `LMSActivityEvent`. Tất cả dữ liệu nguồn đều trỏ qua khóa ngoại `Enrollment.enrollmentId`.
+   - **4 bảng vận hành & ngoại lệ lịch trình (`12-data-schema-ops.md`):** `ImportBatch`, `ImportErrorRow`, `AcademicCalendarException`, `LMSMaintenanceWindow`.
+   - Migration `20260929200000_add_data_import_tables` đã được sinh và deploy trực tiếp vào PostgreSQL.
+
+2. **Validators & Schemas (Zod):**
+   - Viết [src/modules/data-import/validators/import.schema.ts](file:///e:/CTUT-EWARS/src/modules/data-import/validators/import.schema.ts).
+   - Kiểm tra định dạng từng dòng cho 5 loại dữ liệu: `attendanceRowSchema`, `assessmentRowSchema`, `lmsAssignmentRowSchema`, `lmsSubmissionRowSchema`, `lmsEventRowSchema`.
+   - Schema thao tác lô: `uploadFileSchema`, `discardBatchSchema`, `listBatchesSchema`, `listErrorRowsSchema`.
+
+3. **Core Service với Pipeline 5 giai đoạn:**
+   - Cài đặt tại [src/modules/data-import/services/import.service.ts](file:///e:/CTUT-EWARS/src/modules/data-import/services/import.service.ts):
+     - Pipeline chuẩn: `UPLOADING` → `VALIDATING` → `STAGED` → `LOADED` → `RECONCILED` (hoặc `REJECTED`).
+     - Chia chunk nạp dữ liệu (500 dòng/lô) bảo vệ bộ nhớ và hiệu năng cơ sở dữ liệu.
+     - Chống nhập trùng bằng hàm `computeChecksum` (SHA-256) dựa trên nội dung file thô (`sourceChecksum`).
+     - Đối chiếu bắt buộc: Kiểm tra MSSV, học phần VÀ trạng thái `Enrollment.enrollmentStatus = REGISTERED` cùng lịch học `CourseSessionSchedule` trước khi nạp chính thức.
+     - Phân loại lỗi chi tiết vào `ImportErrorRow`: `INVALID_FORMAT`, `NOT_IN_CATALOG`, `DUPLICATE`, `OUT_OF_RANGE`, `NOT_ENROLLED`.
+     - Hỗ trợ xuất danh sách dòng lỗi dạng CSV qua `exportErrorRowsAsCSV()`.
+     - Hỗ trợ nhập lại các dòng đã sửa, liên kết chặt chẽ với lô gốc qua `parentBatchId`.
+     - Ràng buộc bất biến: `discardBatch()` chỉ cho phép hủy lô ở trạng thái `STAGED`, nghiêm cấm hủy khi lô đã đạt `LOADED`/`RECONCILED` để bảo vệ Rule Engine.
+
+4. **Lưu trữ MinIO S3-compatible:**
+   - Cài đặt tại [src/modules/data-import/services/storage.service.ts](file:///e:/CTUT-EWARS/src/modules/data-import/services/storage.service.ts) lưu trữ nguyên trạng các file dữ liệu được tải lên vào bucket `ctuet-ewars-imports`.
+
+5. **Server Actions & Phân quyền RBAC:**
+   - Cài đặt tại [src/modules/data-import/actions/import.action.ts](file:///e:/CTUT-EWARS/src/modules/data-import/actions/import.action.ts) theo đúng pattern 5 bước (`scaffold-server-action`):
+     - `uploadImportFile`: Tải file lên, lưu MinIO, chạy pipeline 5 bước và ghi Audit Log (`IMPORT_FILE`).
+     - `listBatches`: Xem lịch sử và lọc các lô theo trạng thái/loại dữ liệu.
+     - `getErrorRows`: Lấy chi tiết các dòng lỗi kèm lý do chuẩn hóa.
+     - `discardImportBatch`: Hủy lô `STAGED` và ghi Audit Log (`DISCARD_BATCH`).
+     - Phân quyền qua `assertScope` trong [src/lib/authz.ts](file:///e:/CTUT-EWARS/src/lib/authz.ts): Chỉ `TRAINING_OFFICER` và `ADMIN` có quyền thao tác với `ImportBatch` (chặn `STUDENT` và `ADVISOR`).
+
+6. **Giao diện người dùng (UI):**
+   - Danh sách lô nhập & bộ lọc: [src/app/data-import/page.tsx](file:///e:/CTUT-EWARS/src/app/data-import/page.tsx) & [src/app/data-import/components/import-batch-table.tsx](file:///e:/CTUT-EWARS/src/app/data-import/components/import-batch-table.tsx).
+   - Dialog tải lên file & nhập lại: [src/app/data-import/components/upload-import-dialog.tsx](file:///e:/CTUT-EWARS/src/app/data-import/components/upload-import-dialog.tsx).
+   - Chi tiết dòng lỗi: [src/app/data-import/[batchId]/errors/page.tsx](file:///e:/CTUT-EWARS/src/app/data-import/[batchId]/errors/page.tsx) & [src/app/data-import/[batchId]/errors/components/error-rows-table.tsx](file:///e:/CTUT-EWARS/src/app/data-import/[batchId]/errors/components/error-rows-table.tsx) với cột "Lý do lỗi" badge màu đỏ và nút "Tải CSV dòng lỗi" ở đầu bảng theo đúng `03-ui-design.md`.
+   - Route Handler tải file CSV: [src/app/api/data-import/[batchId]/errors/export/route.ts](file:///e:/CTUT-EWARS/src/app/api/data-import/[batchId]/errors/export/route.ts).
+
+7. **Background Worker BullMQ:**
+   - Worker đồng bộ LMS tại [src/workers/sync-lms.worker.ts](file:///e:/CTUT-EWARS/src/workers/sync-lms.worker.ts) tích hợp vào [src/workers/index.ts](file:///e:/CTUT-EWARS/src/workers/index.ts) sử dụng chung kết nối `redisConnection`.
+
+8. **Đảm bảo chất lượng & Kiểm thử (52/52 tests pass, 6 test files):**
+   - [src/modules/data-import/__tests__/import.test.ts](file:///e:/CTUT-EWARS/src/modules/data-import/__tests__/import.test.ts): 18 unit tests cho parser, checksum và các Zod validator.
+   - [src/modules/data-import/__tests__/import-lifecycle.test.ts](file:///e:/CTUT-EWARS/src/modules/data-import/__tests__/import-lifecycle.test.ts): 11 tests kiểm tra đầy đủ các ràng buộc nghiệp vụ:
+     - Chống nhập trùng checksum (FR-IMP-08).
+     - Ràng buộc hủy batch `STAGED`, từ chối hủy batch `LOADED` (FR-IMP-09).
+     - Đối soát `Enrollment` và gắn cờ `NOT_ENROLLED` (FR-IMP-10).
+     - Cô lập dữ liệu: Dữ liệu lỗi/chưa đối soát không bị ghi vào bảng chính thức (FR-IMP-11).
+     - Xuất CSV lỗi kèm số dòng file gốc và lý do (FR-IMP-06).
+     - Luồng roundtrip hoàn chỉnh: *File lỗi → Tải danh sách lỗi → Sửa dữ liệu → Nhập lại liên kết với `parentBatchId`* (FR-IMP-07).
+   - [src/modules/data-import/__tests__/import.action.test.ts](file:///e:/CTUT-EWARS/src/modules/data-import/__tests__/import.action.test.ts): 7 tests kiểm tra phân quyền RBAC và ghi nhận Audit Log.
+
+9. **Git & An toàn bảo mật:**
+   - Đã đưa `.agents/` và `implement.md` vào `.gitignore` và untrack khỏi git index (`git rm --cached`).
+   - Kiểm tra toàn diện `tsc --noEmit` (0 lỗi), `eslint` (0 lỗi), `vitest` (52/52 passed).
+
+---
+
+## 9. Kế hoạch Tiếp theo (Phase 3 — Module `rule-engine`)
+
+Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 3 — Module `rule-engine`** (lõi nghiên cứu quan trọng nhất của hệ thống):
+
+1. **Sinh Prisma Schema:**
+   - Dùng skill `generate-prisma-schema` cho 7 bảng ở [11-data-schema-rule-engine.md](file:///e:/CTUT-EWARS/.agents/rules/11-data-schema-rule-engine.md):
+     - `Rule`: Định danh luật nghiệp vụ (`ruleCode`, `name`, `category`).
+     - `RuleVersion`: Phiên bản cụ thể (`thresholds`, `weight`, `severity`, `status`, `approvedBy`).
+     - `RuleTrigger`: Bằng chứng 1 lần luật đúng với dữ liệu sinh viên.
+     - `RiskScoreLog`: Nhật ký điểm rủi ro tổng hợp kèm `dataCompletenessLevel` và snapshot trọng số.
+     - `Alert`: Hồ sơ cảnh báo hiển thị cho CVHT (`isReferenceOnly = true`).
+     - `Intervention`: Hành động can thiệp gắn với `Alert`.
+     - `Notification`: Thông báo gửi tới CVHT/QLĐT với `dedupKey`.
+   - Sinh migration và cập nhật cơ sở dữ liệu.
+
+2. **Cài đặt 13 Luật Nghiệp vụ & Nhóm Ngoại lệ (`08-business-rules-catalog.md`):**
+   - **4 luật điểm danh:** HR-ATT-01 (Vắng liên tiếp), HR-ATT-02 (Ngưỡng cấm thi), HR-ATT-03 (Vắng đa môn 7 ngày), HR-ATT-04 (Không đi học đầu kỳ).
+   - **4 luật học lực:** HR-ACA-01 (Điểm liệt bài quan trọng), HR-ACA-02 (Tiệm cận ngưỡng buộc thôi học), HR-ACA-03 (Sụt giảm GPA đột ngột), HR-ACA-04 (Học lại ≥3 lần do rớt).
+   - **3 luật LMS:** HR-LMS-01 (Không tương tác kéo dài), HR-LMS-02 (Bỏ nộp bài bắt buộc liên tiếp), HR-LMS-03 (2 bài 0 điểm liên tiếp).
+   - **2 luật tổ hợp:** HR-COMB-01 (Tín hiệu xấu đồng thời ở ≥2/3 nguồn), HR-COMB-02 (Biến mất hoàn toàn ≥10 ngày - liên hệ khẩn cấp).
+   - **Nhóm ngoại lệ (HR-EXC):** Miễn/hoãn thi, bảo lưu, nghỉ ốm, gia hạn deadline LMS.
+
+3. **Xây dựng Orchestrator 10 Bước Chuẩn:**
+   - Triển khai pipeline chuẩn 10 bước theo dạng pure orchestrator, có logging chi tiết từng bước.
+   - Công thức tính `RiskScore`: chuẩn hóa trọng số (renormalize) theo `DataStatus` (`AVAILABLE`), xử lý missing-data policy và chống rò rỉ thời gian (temporal leakage).
+   - Gộp nguyên nhân theo khóa tương quan và tính `max(severity)`.
+
+4. **Background Jobs BullMQ:**
+   - Hoàn thiện xử lý trong `calculate-risk-score` và `evaluate-hard-triggers` theo lô `Enrollment`.
+
+5. **Giao diện Admin Cấu hình Luật:**
+   - Quản lý vòng đời `RuleVersion`: tạo nháp (`DRAFT`), thử nghiệm (`TESTING`), kích hoạt (`ACTIVE`), lưu trữ (`ARCHIVED`).
+   - Tách quyền tạo nháp vs duyệt (`approvedBy`).
+
+6. **Kiểm thử Toàn diện (Coverage ≥ 90%):**
+   - Áp dụng skill `rule-engine-test-suite` phủ ma trận kiểm thử bắt buộc: điều kiện biên, ngoại lệ, thiếu dữ liệu, chống rò rỉ thời gian.

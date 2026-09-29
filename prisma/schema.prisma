@@ -83,6 +83,11 @@ model User {
   sessions Session[]
   accounts Account[]
 
+  // Phase 2 relations
+  importBatches        ImportBatch[]            @relation("ImportBatchPerformer")
+  deadlineExtensions   LMSDeadlineExtension[]   @relation("DeadlineExtensionGrantor")
+  assignmentExemptions LMSAssignmentExemption[] @relation("AssignmentExemptionGrantor")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -98,6 +103,10 @@ model Student {
 
   advisor     User         @relation("AdvisorStudents", fields: [advisorId], references: [userId])
   enrollments Enrollment[]
+
+  // Phase 2 relations
+  deadlineExtensions   LMSDeadlineExtension[]
+  assignmentExemptions LMSAssignmentExemption[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -129,11 +138,12 @@ model CourseSection {
   usesLMS         Boolean
   sectionStatus   SectionStatus
 
-  course      Course                  @relation(fields: [courseId], references: [courseId])
-  term        Term                    @relation(fields: [termId], references: [termId])
-  instructor  User?                   @relation("InstructorSections", fields: [instructorId], references: [userId])
-  enrollments Enrollment[]
-  schedules   CourseSessionSchedule[]
+  course         Course                  @relation(fields: [courseId], references: [courseId])
+  term           Term                    @relation(fields: [termId], references: [termId])
+  instructor     User?                   @relation("InstructorSections", fields: [instructorId], references: [userId])
+  enrollments    Enrollment[]
+  schedules      CourseSessionSchedule[]
+  lmsAssignments LMSAssignment[]
 }
 
 model Enrollment {
@@ -153,6 +163,12 @@ model Enrollment {
   student       Student       @relation(fields: [studentId], references: [studentId])
   courseSection CourseSection @relation(fields: [courseSectionId], references: [courseSectionId])
 
+  // Phase 2 relations
+  attendanceRecords AttendanceRecord[]
+  assessmentResults AssessmentResult[]
+  lmsSubmissions    LMSSubmission[]
+  lmsActivityEvents LMSActivityEvent[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -166,7 +182,8 @@ model CourseSessionSchedule {
   sessionStatus   SessionStatus
   cancelReason    String?       @db.Text
 
-  courseSection CourseSection @relation(fields: [courseSectionId], references: [courseSectionId])
+  courseSection     CourseSection      @relation(fields: [courseSectionId], references: [courseSectionId])
+  attendanceRecords AttendanceRecord[]
 
   @@unique([courseSectionId, sessionDate])
 }
@@ -211,4 +228,255 @@ model Verification {
   expiresAt  DateTime
   createdAt  DateTime? @default(now())
   updatedAt  DateTime? @updatedAt
+}
+
+// ==========================================
+// 4. ENUMS — DATA-IMPORT & SOURCE RECORDS
+// ==========================================
+
+enum AttendanceStatus {
+  PRESENT
+  EXCUSED_ABSENCE
+  UNEXCUSED_ABSENCE
+  LATE
+}
+
+enum ResultStatus {
+  DRAFT
+  FINAL
+  UNDER_APPEAL
+  EXEMPT
+  WAIVED
+}
+
+enum LMSAssignmentType {
+  QUIZ
+  HOMEWORK
+  DISCUSSION
+  PROJECT
+}
+
+enum LMSAssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum LMSSubmissionStatus {
+  ON_TIME
+  LATE
+}
+
+enum LMSEventType {
+  VIEW_MATERIAL
+  DISCUSSION_POST
+  LOGIN
+  ACTIVITY_COMPLETE
+}
+
+enum ImportDataType {
+  ENROLLMENT
+  ATTENDANCE
+  ASSESSMENT
+  LMS_ASSIGNMENT
+  LMS_SUBMISSION
+  LMS_EVENT
+}
+
+enum DataSource {
+  FILE
+  API
+}
+
+enum ImportBatchStatus {
+  UPLOADING
+  VALIDATING
+  STAGED
+  LOADED
+  RECONCILED
+  REJECTED
+  DISCARDED
+}
+
+enum ImportErrorReason {
+  INVALID_FORMAT
+  NOT_IN_CATALOG
+  DUPLICATE
+  OUT_OF_RANGE
+  NOT_ENROLLED
+}
+
+enum CalendarExceptionType {
+  HOLIDAY
+  MAKEUP_SESSION
+  EXAM_WEEK
+}
+
+// ==========================================
+// 5. SOURCE RECORDS (10-data-schema-source-records.md)
+// ==========================================
+
+model AttendanceRecord {
+  id               String           @id @default(uuid())
+  enrollmentId     String
+  sessionId        String
+  attendanceStatus AttendanceStatus
+  source           String           @db.VarChar(20)
+  importBatchId    String
+  updatedAt        DateTime         @updatedAt
+
+  enrollment  Enrollment            @relation(fields: [enrollmentId], references: [enrollmentId])
+  session     CourseSessionSchedule @relation(fields: [sessionId], references: [sessionId])
+  importBatch ImportBatch           @relation(fields: [importBatchId], references: [id])
+
+  @@unique([enrollmentId, sessionId])
+}
+
+model AssessmentResult {
+  id             String       @id @default(uuid())
+  enrollmentId   String
+  assessmentType String       @db.VarChar(30)
+  weight         Float
+  score          Float?
+  scoreScale     String       @db.VarChar(10)
+  resultStatus   ResultStatus
+  importBatchId  String
+  publishedAt    DateTime?
+
+  enrollment  Enrollment  @relation(fields: [enrollmentId], references: [enrollmentId])
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id])
+
+  @@unique([enrollmentId, assessmentType])
+}
+
+model LMSAssignment {
+  assignmentId    String              @id @db.VarChar(30)
+  courseSectionId String              @db.VarChar(20)
+  assignmentType  LMSAssignmentType
+  title           String              @db.VarChar(150)
+  isRequired      Boolean
+  defaultDeadline DateTime
+  sequenceNumber  Int
+  status          LMSAssignmentStatus
+  importBatchId   String
+
+  courseSection CourseSection            @relation(fields: [courseSectionId], references: [courseSectionId])
+  importBatch   ImportBatch              @relation(fields: [importBatchId], references: [id])
+  submissions   LMSSubmission[]
+  extensions    LMSDeadlineExtension[]
+  exemptions    LMSAssignmentExemption[]
+}
+
+model LMSDeadlineExtension {
+  id           String   @id @default(uuid())
+  assignmentId String   @db.VarChar(30)
+  studentId    String?  @db.VarChar(20)
+  newDeadline  DateTime
+  reason       String?  @db.Text
+  grantedBy    String   @db.VarChar(20)
+  grantedAt    DateTime
+
+  assignment LMSAssignment @relation(fields: [assignmentId], references: [assignmentId])
+  student    Student?      @relation(fields: [studentId], references: [studentId])
+  grantor    User          @relation("DeadlineExtensionGrantor", fields: [grantedBy], references: [userId])
+}
+
+model LMSAssignmentExemption {
+  id           String   @id @default(uuid())
+  assignmentId String   @db.VarChar(30)
+  studentId    String?  @db.VarChar(20)
+  reason       String?  @db.Text
+  grantedBy    String   @db.VarChar(20)
+  grantedAt    DateTime
+
+  assignment LMSAssignment @relation(fields: [assignmentId], references: [assignmentId])
+  student    Student?      @relation(fields: [studentId], references: [studentId])
+  grantor    User          @relation("AssignmentExemptionGrantor", fields: [grantedBy], references: [userId])
+}
+
+model LMSSubmission {
+  submissionId     String              @id @default(uuid())
+  assignmentId     String              @db.VarChar(30)
+  enrollmentId     String
+  attemptNumber    Int
+  isLatest         Boolean
+  submittedAt      DateTime
+  score            Float?
+  submissionStatus LMSSubmissionStatus
+  importBatchId    String
+
+  assignment  LMSAssignment @relation(fields: [assignmentId], references: [assignmentId])
+  enrollment  Enrollment    @relation(fields: [enrollmentId], references: [enrollmentId])
+  importBatch ImportBatch   @relation(fields: [importBatchId], references: [id])
+
+  @@unique([assignmentId, enrollmentId, attemptNumber])
+}
+
+model LMSActivityEvent {
+  eventId       String       @id @default(uuid())
+  enrollmentId  String
+  eventType     LMSEventType
+  timestamp     DateTime
+  resourceId    String?      @db.VarChar(30)
+  importBatchId String
+
+  enrollment  Enrollment  @relation(fields: [enrollmentId], references: [enrollmentId])
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id])
+}
+
+// ==========================================
+// 6. IMPORT & OPERATIONAL (12-data-schema-ops.md)
+// ==========================================
+
+model ImportBatch {
+  id               String            @id @default(uuid())
+  dataType         ImportDataType
+  source           DataSource
+  sourceChecksum   String            @db.VarChar(64)
+  performedBy      String            @db.VarChar(20)
+  status           ImportBatchStatus
+  totalRows        Int
+  successRows      Int
+  errorRows        Int
+  parentBatchId    String?
+  originalFilePath String            @db.VarChar(255)
+  createdAt        DateTime          @default(now())
+  completedAt      DateTime?
+
+  performer    User             @relation("ImportBatchPerformer", fields: [performedBy], references: [userId])
+  parentBatch  ImportBatch?     @relation("BatchCorrection", fields: [parentBatchId], references: [id])
+  childBatches ImportBatch[]    @relation("BatchCorrection")
+  errorRows_   ImportErrorRow[]
+
+  // Reverse relations from source records
+  attendanceRecords AttendanceRecord[]
+  assessmentResults AssessmentResult[]
+  lmsAssignments    LMSAssignment[]
+  lmsSubmissions    LMSSubmission[]
+  lmsActivityEvents LMSActivityEvent[]
+}
+
+model ImportErrorRow {
+  id              String            @id @default(uuid())
+  importBatchId   String
+  sourceRowNumber Int
+  rawData         Json
+  errorReason     ImportErrorReason
+  resolved        Boolean           @default(false)
+
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id])
+}
+
+model AcademicCalendarException {
+  id            String                @id @default(uuid())
+  exceptionDate DateTime              @db.Date
+  type          CalendarExceptionType
+  description   String?               @db.Text
+}
+
+model LMSMaintenanceWindow {
+  id          String   @id @default(uuid())
+  startAt     DateTime
+  endAt       DateTime
+  description String?  @db.Text
 }
