@@ -14,8 +14,12 @@
     "format:check": "prettier --check .",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
+    "db:seed": "tsx prisma/seed.ts",
     "postinstall": "prisma generate",
     "prepare": "husky"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "lint-staged": {
     "src/**/*.{js,jsx,ts,tsx}": [

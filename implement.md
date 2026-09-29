@@ -68,9 +68,9 @@ Ghi chú: `admin` (Phase 6) chỉ thực sự cần Phase 3 xong ở phần "duy
 
 **Definition of Done:**
 
-- [ ] Đăng nhập được với cả 4 role, mỗi role thấy đúng phạm vi dữ liệu theo `assertScope()`.
-- [ ] Test tự động xác nhận CVHT A không truy vấn được dữ liệu của sinh viên thuộc CVHT B.
-- [ ] `writeAuditLog()` có test, ghi đúng bản ghi khi gọi thử.
+- [x] Đăng nhập được với cả 4 role, mỗi role thấy đúng phạm vi dữ liệu theo `assertScope()`.
+- [x] Test tự động xác nhận CVHT A không truy vấn được dữ liệu của sinh viên thuộc CVHT B.
+- [x] `writeAuditLog()` có test, ghi đúng bản ghi khi gọi thử.
 
 ---
 

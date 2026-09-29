@@ -144,11 +144,33 @@ Mọi bảng dữ liệu nguồn (điểm danh, điểm số, bài tập LMS, lo
 
 ---
 
-## 7. Kế hoạch Tiếp theo (Phase 1)
+## 7. Những Việc Đã Hoàn Thành Trong Phase 1 (Danh mục nền tảng & Xác thực)
 
-Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 1 — Danh mục nền tảng & Xác thực** theo `implement.md`:
-- Sử dụng skill `generate-prisma-schema`: Tạo `schema.prisma` đầy đủ cho 7 bảng danh mục ban đầu theo [09-data-schema-identity.md](file:///e:/CTUT-EWARS/.agents/rules/09-data-schema-identity.md) (`User`, `Student`, `Term`, `Course`, `CourseSection`, `Enrollment`, `CourseSessionSchedule`).
-- Cấu hình Better Auth, wiring session vào App Router.
-- Viết `src/lib/authz.ts` cài đặt hàm `assertScope()`.
-- Viết Server Actions mẫu đầu tiên tuân thủ skill `scaffold-server-action`.
-- Tạo seed data mẫu (dữ liệu giả định, không dùng dữ liệu sinh viên thật theo quy định pháp lý).
+1. **Schema & Migration Prisma (7 bảng danh mục):**
+   - Đã sinh đầy đủ 7 model theo [09-data-schema-identity.md](file:///e:/CTUT-EWARS/.agents/rules/09-data-schema-identity.md): `User`, `Student`, `Term`, `Course`, `CourseSection`, `Enrollment`, `CourseSessionSchedule` cùng các bảng xác thực Better Auth (`Session`, `Account`, `Verification`).
+   - Đã chạy migration `init_identity_and_auth` thành công vào PostgreSQL.
+2. **Better Auth & Quản lý Phiên:**
+   - Cấu hình Prisma adapter cho Better Auth trong [src/lib/auth.ts](file:///e:/CTUT-EWARS/src/lib/auth.ts).
+   - Tạo helper `getSession()` trong [src/lib/session.ts](file:///e:/CTUT-EWARS/src/lib/session.ts) và route handler tại `src/app/api/auth/[...all]/route.ts`.
+3. **Phân quyền theo phạm vi (`assertScope`):**
+   - Viết [src/lib/authz.ts](file:///e:/CTUT-EWARS/src/lib/authz.ts) thực thi nghiêm ngặt ma trận 4 Roles (`STUDENT`, `ADVISOR`, `TRAINING_OFFICER`, `ADMIN`).
+   - Bộ test tự động [src/lib/authz.test.ts](file:///e:/CTUT-EWARS/src/lib/authz.test.ts) kiểm tra 100% các tình huống (chặn sinh viên xem SV khác, chặn CVHT A xem SV CVHT B, kiểm tra phạm vi khoa của QLĐT).
+4. **Server Action chuẩn theo skill `scaffold-server-action`:**
+   - Cài đặt mẫu 5 bước tại `src/modules/admin/actions/student.action.ts` và test tự động [student.action.test.ts](file:///e:/CTUT-EWARS/src/modules/admin/actions/student.action.test.ts) xác nhận tự động ghi `writeAuditLog` khi có truy cập ngoài phạm vi thông thường.
+5. **Seed dữ liệu giả lập chuẩn:**
+   - [prisma/seed.ts](file:///e:/CTUT-EWARS/prisma/seed.ts) nạp thành công 24 Users (1 Admin, 1 QLĐT, 2 CVHT, 20 SV), 20 Students, 1 Term, 3 Courses, 3 CourseSections, 40 Enrollments, 10 buổi học.
+   - Ràng buộc `User.userId = Student.studentId` và email sinh viên `@student.ctuet.edu.vn`.
+6. **Đạt 100% Definition of Done Phase 1:**
+   - Đăng nhập & phân quyền cả 4 role pass test.
+   - CVHT A không truy vấn được sinh viên của CVHT B pass test.
+   - `writeAuditLog()` pass test.
+
+---
+
+## 8. Kế hoạch Tiếp theo (Phase 2 — Module `data-import`)
+
+Khi bắt đầu tiếp tục, thực hiện **Phase 2 — Module `data-import`** theo `implement.md`:
+- Dùng skill `generate-prisma-schema` cho 7 bảng ở `10-data-schema-source-records.md` + 4 bảng ở `12-data-schema-ops.md`.
+- Dùng skill `implement-data-import-source` cho từng loại dữ liệu nguồn (điểm danh, điểm học phần, LMS assignments/submissions/events).
+- UI upload file, xem lịch sử `ImportBatch`, tải dòng lỗi và hủy batch `STAGED`.
+- Job đồng bộ LMS qua BullMQ queue `sync-lms`.
