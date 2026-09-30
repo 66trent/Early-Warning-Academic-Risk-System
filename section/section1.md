@@ -225,6 +225,18 @@ Mọi bảng dữ liệu nguồn (điểm danh, điểm số, bài tập LMS, lo
    - Đã đưa `.agents/` và `implement.md` vào `.gitignore` và untrack khỏi git index (`git rm --cached`).
    - Kiểm tra toàn diện `tsc --noEmit` (0 lỗi), `eslint` (0 lỗi), `vitest` (52/52 passed).
 
+10. **Các Lỗi Runtime & Kiến Thức Cốt Lõi Đã Giải Quyết Trong Quá Trình Test UI:**
+    - **Lỗi 1: `A "use server" file can only export async functions, found object`:**
+      - *Nguyên nhân:* File Zod schema [src/modules/data-import/validators/import.schema.ts](file:///e:/CTUT-EWARS/src/modules/data-import/validators/import.schema.ts) gắn nhầm chỉ thị `"use server";`. Trong Next.js App Router, `"use server"` định danh Server Actions module và bắt buộc 100% export phải là async function.
+      - *Giải pháp:* Gỡ bỏ `"use server";` khỏi các file schema/validator/type. Chỉ thị này chỉ được đặt tại các Server Action modules (`*.action.ts`).
+    - **Lỗi 2: Mismatch Session giữa Better Auth & Prisma Schema (`{"success":false,"error":"Yêu cầu đăng nhập."}`):**
+      - *Nguyên nhân:* Model `User` trong Prisma schema sử dụng `userId String @id` và `id String @unique UUID`. Better Auth mặc định ánh xạ khóa chính của `User` qua trường `id` (UUID), trong khi `Session.userId` liên kết tới `User.userId` (`QLDT001`). Khi `auth.api.getSession()` truy vấn người dùng từ `session.userId`, adapter tìm theo `user.id = "QLDT001"` và trả về `null`.
+      - *Giải pháp:* Nâng cấp hàm `getSession()` tại [src/lib/session.ts](file:///e:/CTUT-EWARS/src/lib/session.ts) với cơ chế fallback đọc cookie `better-auth.session_token`, đối soát trực tiếp với bảng `Session` và `User` trong PostgreSQL để trích xuất đầy đủ quyền hạn (`id`, `userId`, `role`, `fullName`, `email`, `scopeConfig`).
+    - **Hạ tầng hỗ trợ Test UI:**
+      - Xây dựng cổng đăng nhập dev tại [src/app/login/page.tsx](file:///e:/CTUT-EWARS/src/app/login/page.tsx) và endpoint [src/app/api/auth/dev-login/route.ts](file:///e:/CTUT-EWARS/src/app/api/auth/dev-login/route.ts) cho phép đăng nhập 1-click vào cả 4 vai trò (`TRAINING_OFFICER`, `ADMIN`, `ADVISOR`, `STUDENT`).
+      - Tích hợp banner nhận diện trạng thái phiên đăng nhập trực quan ngay tại [src/app/data-import/page.tsx](file:///e:/CTUT-EWARS/src/app/data-import/page.tsx).
+      - Chuẩn bị sẵn bộ file CSV mẫu tại [public/sample-data/](file:///e:/CTUT-EWARS/public/sample-data/) (`attendance_valid.csv`, `attendance_with_errors.csv`, `assessment_valid.csv`) để test toàn bộ các kịch bản: nạp hợp lệ, nạp lỗi, xem lỗi, tải CSV lỗi, chống trùng SHA-256.
+
 ---
 
 ## 9. Kế hoạch Tiếp theo (Phase 3 — Module `rule-engine`)
