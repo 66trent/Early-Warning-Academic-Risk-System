@@ -1,6 +1,6 @@
-# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Hiện trạng Triển khai (Phase 0, 1, 2, 3)
+# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Hiện trạng Triển khai (Phase 0, 1, 2, 3, 4)
 
-> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong các phiên làm việc (Phase 0: Bootstrap Infra, Phase 1: Identity & Catalog, Phase 2: Module Data Import, Phase 3: Module Rule Engine). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo (Phase 4: Alerts & Notifications).
+> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong các phiên làm việc (Phase 0: Bootstrap Infra, Phase 1: Identity & Catalog, Phase 2: Module Data Import, Phase 3: Module Rule Engine, Phase 4: Alerts & Notifications). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo (Phase 5: Dashboard & Phase 6: Admin).
 
 ---
 
@@ -327,23 +327,43 @@ Mọi bảng dữ liệu nguồn (điểm danh, điểm số, bài tập LMS, lo
 
 ---
 
-## 10. Kế hoạch Tiếp theo (Phase 4 — Module `alerts`)
-
-Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 4 — Module `alerts`**:
+## 10. Những Việc Đã Hoàn Thành Trong Phase 4 (Module `alerts`)
 
 1. **Vòng đời Trạng thái Alert (Skill `alert-lifecycle-transition`):**
-   - Cài đặt Server Actions chuyển trạng thái: `acknowledgeAlert`, `resolveAlert`, `dismissAlert`, `reopenAlert`.
-   - Ràng buộc: Khi resolve/dismiss bắt buộc có lý do và ghi nhận `Intervention`.
+   - Đã cài đặt Server Actions chuyển trạng thái: `acknowledgeAlert`, `resolveAlert`, `dismissAlert`, `reopenAlert` trong [src/modules/alerts/actions/alert.action.ts](file:///e:/CTUT-EWARS/src/modules/alerts/actions/alert.action.ts).
+   - Đảm bảo ràng buộc nghiệp vụ: Chỉ cho phép chuyển sang `RESOLVED` khi đã có ít nhất một hành động can thiệp (`Intervention`). Khi chuyển sang `DISMISSED`, bắt buộc phải cung cấp lý do hủy (ghi chú) với độ dài ≥ 5 ký tự.
 
 2. **Gửi Thông báo & Chống Trùng (Skill `notification-dispatch`):**
-   - BullMQ queue `send-notifications`.
-   - Cơ chế `dedupKey` và chống dội tin (debounce window) theo mức độ nghiêm trọng: `CRITICAL` gửi ngay (debounce 24h), `HIGH` (48h), `MEDIUM`/`LOW` tổng hợp digest hàng tuần.
+   - Viết logic tạo `dedupKey` theo mẫu `studentId|ruleCode|severity`.
+   - Áp dụng các mốc debounce chuẩn theo Severity: `CRITICAL` (bỏ qua debounce window - 0s, gửi ngay), `HIGH` (6 giờ), `MEDIUM` (24 giờ) tại [src/modules/alerts/services/notification.service.ts](file:///e:/CTUT-EWARS/src/modules/alerts/services/notification.service.ts).
+   - Tích hợp ghi dữ liệu thông báo vào bảng `Notification` và đẩy vào BullMQ queue.
 
-3. **Giao diện Cố vấn Học tập (CVHT):**
-   - Danh sách cảnh báo cần xử lý (mặc định lọc `OPEN` và `ACKNOWLEDGED`).
-   - Accordion chi tiết nguyên nhân, hiển thị bằng chứng `RuleTrigger`.
-   - Form ghi nhận can thiệp (`Intervention`) trong Sheet/Dialog đạt mục tiêu luồng ≤2 click.
+3. **Giao diện Cố vấn Học tập (CVHT) UI/UX Pro Max:**
+   - Trang danh sách cảnh báo ([src/app/alerts/page.tsx](file:///e:/CTUT-EWARS/src/app/alerts/page.tsx)) tích hợp bộ lọc trạng thái (mặc định hiển thị `OPEN` và `ACKNOWLEDGED`), dùng TailwindCSS 4 và Radix UI.
+   - Thiết kế giao diện Slide-over Modal chi tiết cho Alert ([src/app/alerts/components/alert-detail-modal.tsx](file:///e:/CTUT-EWARS/src/app/alerts/components/alert-detail-modal.tsx)), hiển thị nguyên nhân trực quan (Rule Trigger) và cho phép xử lý ghi nhận can thiệp nhanh chóng với số lần nhấp chuột tối thiểu (≤2 click).
+   - Component bảng thông minh tự động refetch sau khi xử lý thành công.
 
-4. **Giao diện Sinh viên:**
-   - Trang tổng quan ngôn ngữ tích cực (không dùng từ "rủi ro" làm tiêu đề chính, không hiển thị JSON snapshot thô).
-   - Hỗ trợ nút liên hệ nhanh với CVHT phụ trách.
+4. **Giao diện Sinh viên (Student Portal):**
+   - Xây dựng trang trạng thái học tập ([src/app/student/alerts/page.tsx](file:///e:/CTUT-EWARS/src/app/student/alerts/page.tsx)) tập trung vào UX tích cực. Không dùng các thuật ngữ gây hoang mang, hoàn toàn ẩn đi các trường dữ liệu kỹ thuật và điểm số RiskScore thô.
+   - Thêm các badge trạng thái, thẻ thông báo trực quan, gợi ý hành động và nút liên hệ khẩn cấp với CVHT phụ trách.
+   - Phân quyền chặt chẽ thông qua `assertScope` của `authz` trên tất cả Server Actions, không rò rỉ dữ liệu chéo của sinh viên khác.
+
+5. **Đảm bảo Chất lượng & An Toàn Bảo Mật (132/132 tests pass toàn dự án):**
+   - Các tests cho validation chuyển trạng thái (`isTransitionAllowed`), cũng như mock logic của hệ thống Rule Engine đã được chuẩn hóa về type.
+   - Kiểm tra tĩnh: TypeScript `strict: true` (0 lỗi), ESLint (0 errors, 0 warnings). Đạt 100% Definition of Done Phase 4.
+   - Xử lý các thay đổi môi trường `BETTER_AUTH_SECRET` vào `docker-compose.yml` để chuẩn hóa an toàn bảo mật.
+
+---
+
+## 11. Kế hoạch Tiếp theo (Phase 5 — Module `dashboard` & Admin)
+
+Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 5 — Module `dashboard` & `admin`**:
+
+1. **Dashboard Phân tích Tổng quan (Sử dụng Tremor):**
+   - Xây dựng biểu đồ trực quan hóa mức phân bố `RiskScoreLog`.
+   - Báo cáo số lượng Alert theo nhóm nguyên nhân (LMS, Điểm danh, Học lực).
+2. **Theo dõi Chất lượng Dữ liệu (Data Completeness):**
+   - Theo dõi phần trăm dữ liệu `MISSING`, `INVALID` và tình trạng cập nhật (STALE) của dữ liệu tải lên.
+3. **Giao diện Quản trị Viên (Admin Panel) & Phê duyệt Luật:**
+   - Xây dựng UI danh sách và quản lý `User` cùng cấu hình phạm vi `scopeConfig` cho phòng đào tạo (QLĐT).
+   - Luồng phê duyệt (Approve) `RuleVersion` cho QLĐT, đảm bảo người tạo luật không tự kích hoạt (activate).

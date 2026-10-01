@@ -131,10 +131,10 @@ Ghi chú: `admin` (Phase 6) chỉ thực sự cần Phase 3 xong ở phần "duy
 
 **Definition of Done:**
 
-- [ ] Sơ đồ trạng thái Alert được thực thi đúng, có test transition hợp lệ/không hợp lệ.
-- [ ] Test dedup: gửi 2 lần trong cửa sổ debounce → lần 2 bị `SUPPRESSED_DUPLICATE`.
-- [ ] Giao diện CVHT đạt luồng "Xác nhận → Ghi can thiệp" ≤2 click.
-- [ ] Giao diện Sinh viên qua review UX checklist (không dùng từ "rủi ro" làm tiêu đề, có nút liên hệ CVHT).
+- [x] Sơ đồ trạng thái Alert được thực thi đúng, có test transition hợp lệ/không hợp lệ.
+- [x] Test dedup: gửi 2 lần trong cửa sổ debounce → lần 2 bị `SUPPRESSED_DUPLICATE`.
+- [x] Giao diện CVHT đạt luồng "Xác nhận → Ghi can thiệp" ≤2 click.
+- [x] Giao diện Sinh viên qua review UX checklist (không dùng từ "rủi ro" làm tiêu đề, có nút liên hệ CVHT).
 
 ---
 

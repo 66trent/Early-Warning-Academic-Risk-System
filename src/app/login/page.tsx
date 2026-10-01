@@ -2,34 +2,40 @@ import Link from "next/link";
 
 const ROLES = [
   {
+    role: "ADVISOR",
+    name: "Cố vấn học tập (CVHT) — ThS. Nguyễn Văn A",
+    email: "nguyenvana@ctuet.edu.vn",
+    desc: "Quản lý SV phụ trách. Xem danh sách cảnh báo, xác nhận cảnh báo và ghi nhận can thiệp (≤2 clicks).",
+    color: "bg-amber-600 hover:bg-amber-700 text-white",
+    badge: "Khuyên dùng test Phase 4",
+    badgeColor: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    redirect: "/alerts",
+  },
+  {
+    role: "STUDENT",
+    name: "Sinh viên (STUDENT) — B210001",
+    email: "b210001@student.ctuet.edu.vn",
+    desc: "Xem tình hình học tập tích cực cá nhân, nhận gợi ý hỗ trợ và liên hệ CVHT trực tiếp.",
+    color: "bg-emerald-600 hover:bg-emerald-700 text-white",
+    badge: "Giao diện SV (Phase 4)",
+    badgeColor: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+    redirect: "/student/alerts",
+  },
+  {
     role: "TRAINING_OFFICER",
     name: "Cán bộ Đào tạo (QLĐT)",
     email: "qldt@ctuet.edu.vn",
-    desc: "Có toàn quyền nhập dữ liệu (FR-IMP), xem danh sách lỗi, hủy lô STAGED.",
+    desc: "Toàn trường: Nhập dữ liệu (FR-IMP), giám sát cảnh báo và cấu hình luật.",
     color: "bg-blue-600 hover:bg-blue-700 text-white",
-    badge: "Khuyên dùng để test Phase 2",
-    badgeColor: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+    redirect: "/alerts",
   },
   {
     role: "ADMIN",
     name: "Quản trị viên (ADMIN)",
     email: "admin@ctuet.edu.vn",
-    desc: "Quản trị hệ thống, có quyền nhập dữ liệu và hủy lô STAGED.",
+    desc: "Vận hành hệ thống, vô hiệu hóa cảnh báo khi dữ liệu nguồn thay đổi, xem audit log.",
     color: "bg-purple-600 hover:bg-purple-700 text-white",
-  },
-  {
-    role: "ADVISOR",
-    name: "Cố vấn học tập (CVHT)",
-    email: "nguyenvana@ctuet.edu.vn",
-    desc: "Chỉ quản lý SV được phân công. Không có quyền nhập dữ liệu (sẽ bị chặn 403).",
-    color: "bg-amber-600 hover:bg-amber-700 text-white",
-  },
-  {
-    role: "STUDENT",
-    name: "Sinh viên (STUDENT)",
-    email: "b210001@student.ctuet.edu.vn",
-    desc: "Chỉ xem dữ liệu cá nhân. Không có quyền nhập dữ liệu (sẽ bị chặn 403).",
-    color: "bg-neutral-600 hover:bg-neutral-700 text-white",
+    redirect: "/alerts",
   },
 ];
 
@@ -70,7 +76,7 @@ export default function LoginPage() {
               </div>
 
               <Link
-                href={`/api/auth/dev-login?role=${r.role}&redirect=/data-import`}
+                href={`/api/auth/dev-login?role=${r.role}&redirect=${r.redirect}`}
                 className={`ml-4 shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition ${r.color}`}
               >
                 Đăng nhập
@@ -80,7 +86,7 @@ export default function LoginPage() {
         </div>
 
         <div className="mt-8 border-t border-neutral-200 pt-4 text-center text-xs text-neutral-400 dark:border-neutral-800">
-          CTUET Early Warning Academic Risk System • Phase 2 Test Portal
+          CTUET Early Warning Academic Risk System • Phase 4 Alerts & Interventions
         </div>
       </div>
     </div>

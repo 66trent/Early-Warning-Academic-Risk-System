@@ -6,6 +6,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import type { PipelineResult } from "./orchestrator.service";
+import { dispatchNotification } from "@/modules/alerts/services/notification.service";
 
 /**
  * Persist a complete pipeline result to the database.
@@ -86,6 +87,21 @@ export async function persistPipelineResult(
         triggersCreated++;
       }
 
+      // Dispatch notification to advisor
+      if (alertAction.assignedAdvisorId) {
+        try {
+          await dispatchNotification({
+            alertId: alert.alertId,
+            studentId: alertAction.studentId,
+            ruleCode: alertAction.ruleCode,
+            severity: alertAction.severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+            recipientId: alertAction.assignedAdvisorId,
+          });
+        } catch (err) {
+          console.error("[Persistence] Error dispatching notification:", err);
+        }
+      }
+
       alertsCreated++;
     } else if (alertAction.type === "UPDATE" && alertAction.existingAlertId) {
       // Update existing alert
@@ -115,6 +131,24 @@ export async function persistPipelineResult(
           },
         });
         triggersCreated++;
+      }
+
+      // Dispatch notification if new trigger or high severity
+      if (
+        alertAction.assignedAdvisorId &&
+        (alertAction.severity === "HIGH" || alertAction.severity === "CRITICAL")
+      ) {
+        try {
+          await dispatchNotification({
+            alertId: alertAction.existingAlertId,
+            studentId: alertAction.studentId,
+            ruleCode: alertAction.ruleCode,
+            severity: alertAction.severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+            recipientId: alertAction.assignedAdvisorId,
+          });
+        } catch (err) {
+          console.error("[Persistence] Error dispatching notification on update:", err);
+        }
       }
 
       alertsUpdated++;

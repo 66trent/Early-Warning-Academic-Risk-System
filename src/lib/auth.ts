@@ -39,7 +39,7 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false,
   },
-  secret: process.env.BETTER_AUTH_SECRET || "development_secret_key_at_least_16_characters",
+  secret: process.env.BETTER_AUTH_SECRET || "ea74896835a7babc82f7cef48214736b",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
 });
 

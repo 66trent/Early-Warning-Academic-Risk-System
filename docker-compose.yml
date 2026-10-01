@@ -67,7 +67,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/ctuet_ewars?schema=public"
-      BETTER_AUTH_SECRET: "development_secret_key_at_least_16_characters"
+      BETTER_AUTH_SECRET: "ea74896835a7babc82f7cef48214736b"
       BETTER_AUTH_URL: "http://localhost:3000"
       REDIS_URL: "redis://redis:6379"
       MINIO_ENDPOINT: "minio"
@@ -95,7 +95,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/ctuet_ewars?schema=public"
-      BETTER_AUTH_SECRET: "development_secret_key_at_least_16_characters"
+      BETTER_AUTH_SECRET: "ea74896835a7babc82f7cef48214736b"
       BETTER_AUTH_URL: "http://localhost:3000"
       REDIS_URL: "redis://redis:6379"
       MINIO_ENDPOINT: "minio"
