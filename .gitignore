@@ -45,8 +45,6 @@ next-env.d.ts
 
 # Project-specific exclusions
 /.agents/
-implement.md
-section/
 /.claude/
 /.windsurf/
 CLAUDE.md

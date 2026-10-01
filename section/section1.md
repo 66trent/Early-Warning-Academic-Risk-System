@@ -1,6 +1,6 @@
-# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Hiện trạng Triển khai (Phase 0, 1, 2)
+# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Hiện trạng Triển khai (Phase 0, 1, 2, 3)
 
-> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong các phiên làm việc (Phase 0: Bootstrap Infra, Phase 1: Identity & Catalog, Phase 2: Module Data Import). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo (Phase 3: Rule Engine).
+> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong các phiên làm việc (Phase 0: Bootstrap Infra, Phase 1: Identity & Catalog, Phase 2: Module Data Import, Phase 3: Module Rule Engine). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo (Phase 4: Alerts & Notifications).
 
 ---
 
@@ -239,39 +239,111 @@ Mọi bảng dữ liệu nguồn (điểm danh, điểm số, bài tập LMS, lo
 
 ---
 
-## 9. Kế hoạch Tiếp theo (Phase 3 — Module `rule-engine`)
+## 9. Những Việc Đã Hoàn Thành Trong Phase 3 (Module `rule-engine` — Lõi Nghiên Cứu)
 
-Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 3 — Module `rule-engine`** (lõi nghiên cứu quan trọng nhất của hệ thống):
+1. **Schema Prisma & Migration (7 bảng mới + 9 enum):**
+   - Đã sinh đầy đủ 7 model theo [11-data-schema-rule-engine.md](file:///e:/CTUT-EWARS/.agents/rules/11-data-schema-rule-engine.md): `Rule`, `RuleVersion`, `RuleTrigger`, `RiskScoreLog`, `Alert`, `Intervention`, `Notification`.
+   - Các enum phục vụ vận hành: `RuleGroup`, `RuleScope`, `RuleTriggerConditionOperator`, `RuleVersionStatus`, `Severity`, `AlertStatus`, `NotificationChannel`, `NotificationDeliveryStatus`, `SuppressionReason`.
+   - Migration `20261001063901_add_rule_engine_tables` đã được sinh và deploy vào PostgreSQL qua Prisma 7 (`@prisma/adapter-pg`).
 
-1. **Sinh Prisma Schema:**
-   - Dùng skill `generate-prisma-schema` cho 7 bảng ở [11-data-schema-rule-engine.md](file:///e:/CTUT-EWARS/.agents/rules/11-data-schema-rule-engine.md):
-     - `Rule`: Định danh luật nghiệp vụ (`ruleCode`, `name`, `category`).
-     - `RuleVersion`: Phiên bản cụ thể (`thresholds`, `weight`, `severity`, `status`, `approvedBy`).
-     - `RuleTrigger`: Bằng chứng 1 lần luật đúng với dữ liệu sinh viên.
-     - `RiskScoreLog`: Nhật ký điểm rủi ro tổng hợp kèm `dataCompletenessLevel` và snapshot trọng số.
-     - `Alert`: Hồ sơ cảnh báo hiển thị cho CVHT (`isReferenceOnly = true`).
-     - `Intervention`: Hành động can thiệp gắn với `Alert`.
-     - `Notification`: Thông báo gửi tới CVHT/QLĐT với `dedupKey`.
-   - Sinh migration và cập nhật cơ sở dữ liệu.
+2. **Catalog 13 Luật Nghiệp vụ & Nhóm Ngoại lệ (`08-business-rules-catalog.md`):**
+   - Thiết kế dạng pure evaluator functions, không phụ thuộc framework/DB, có logging nguyên nhân rõ ràng:
+     - **Ngoại lệ HR-EXC ([exceptions.evaluator.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/evaluators/exceptions.evaluator.ts)):** Chạy trước mọi luật, phát hiện và lập danh sách skip (bảo lưu, rút học phần, lớp chưa bắt đầu, ngày nghỉ lễ/thiên tai `AcademicCalendarException`, bảo trì LMS `LMSMaintenanceWindow`, gia hạn deadline `LMSDeadlineExtension`, miễn bài tập `LMSAssignmentExemption`).
+     - **4 luật điểm danh ([attendance.evaluator.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/evaluators/attendance.evaluator.ts)):**
+       - `HR-ATT-01`: Vắng liên tiếp ≥3 buổi (`HIGH`).
+       - `HR-ATT-02`: Chạm/vượt ngưỡng cấm thi (ví dụ: ≥20% tổng số buổi) (`CRITICAL`).
+       - `HR-ATT-03`: Vắng đa môn trong sliding window 7 ngày (vắng ≥2 buổi ở ≥2 lớp khác nhau) (`MEDIUM`).
+       - `HR-ATT-04`: Không tham gia học đầu kỳ (vắng toàn bộ các buổi đầu kỳ, loại trừ SV đăng ký muộn) (`HIGH`).
+     - **4 luật học lực ([academic.evaluator.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/evaluators/academic.evaluator.ts)):**
+       - `HR-ACA-01`: Điểm 0/liệt ở bài đánh giá có trọng số lớn (`MEDIUM`/`HIGH`).
+       - `HR-ACA-02`: GPA tích lũy tiệm cận ngưỡng buộc thôi học / cảnh báo học vụ (`CRITICAL`).
+       - `HR-ACA-03`: Sụt giảm GPA đột ngột giữa 2 kỳ hoặc điểm thành phần trong kỳ (`MEDIUM`).
+       - `HR-ACA-04`: Học lại ≥3 lần do rớt môn (`CRITICAL`).
+     - **3 luật LMS ([lms.evaluator.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/evaluators/lms.evaluator.ts)):**
+       - `HR-LMS-01`: Không có hoạt động LMS kéo dài (phân cấp `MEDIUM`/`HIGH`/`CRITICAL` nếu kéo dài ≥14 ngày kèm bỏ deadline).
+       - `HR-LMS-02`: Bỏ nộp bài tập bắt buộc liên tiếp (≥2 bài) (`MEDIUM`/`HIGH`).
+       - `HR-LMS-03`: Hai điểm 0 liên tiếp ở bài kiểm tra tự chấm (`MEDIUM`).
+     - **2 luật tổ hợp ([combined.evaluator.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/evaluators/combined.evaluator.ts)):**
+       - `HR-COMB-01`: Tín hiệu tiêu cực đồng thời ở ≥2/3 nguồn dữ liệu (`CRITICAL`).
+       - `HR-COMB-02`: Biến mất hoàn toàn không dấu vết ≥10 ngày — kích hoạt cờ liên hệ khẩn cấp (`CRITICAL`).
+   - Bộ validator Zod v4 tại [src/modules/rule-engine/validators/rule-engine.schema.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/validators/rule-engine.schema.ts) kiểm tra định dạng và giá trị mặc định cho cấu hình `condition` của toàn bộ 13 luật.
 
-2. **Cài đặt 13 Luật Nghiệp vụ & Nhóm Ngoại lệ (`08-business-rules-catalog.md`):**
-   - **4 luật điểm danh:** HR-ATT-01 (Vắng liên tiếp), HR-ATT-02 (Ngưỡng cấm thi), HR-ATT-03 (Vắng đa môn 7 ngày), HR-ATT-04 (Không đi học đầu kỳ).
-   - **4 luật học lực:** HR-ACA-01 (Điểm liệt bài quan trọng), HR-ACA-02 (Tiệm cận ngưỡng buộc thôi học), HR-ACA-03 (Sụt giảm GPA đột ngột), HR-ACA-04 (Học lại ≥3 lần do rớt).
-   - **3 luật LMS:** HR-LMS-01 (Không tương tác kéo dài), HR-LMS-02 (Bỏ nộp bài bắt buộc liên tiếp), HR-LMS-03 (2 bài 0 điểm liên tiếp).
-   - **2 luật tổ hợp:** HR-COMB-01 (Tín hiệu xấu đồng thời ở ≥2/3 nguồn), HR-COMB-02 (Biến mất hoàn toàn ≥10 ngày - liên hệ khẩn cấp).
-   - **Nhóm ngoại lệ (HR-EXC):** Miễn/hoãn thi, bảo lưu, nghỉ ốm, gia hạn deadline LMS.
+3. **Orchestrator 10 Bước Chuẩn & Công thức RiskScore:**
+   - Cài đặt tại [src/modules/rule-engine/services/orchestrator.service.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/orchestrator.service.ts):
+     - Bước 1: Kiểm tra tính hợp lệ dữ liệu.
+     - Bước 2: Kiểm tra phạm vi đối tượng (`Enrollment.enrollmentStatus = REGISTERED`).
+     - Bước 3: Áp dụng ngoại lệ HR-EXC (chặn luật/miễn bài/gia hạn hạn chót trước khi đánh giá).
+     - Bước 4: Tính chỉ số thành phần và gán nhãn `DataStatus`.
+     - Bước 5: Tính `RiskScore` tổng hợp theo cơ chế renormalize trọng số (loại bỏ `MISSING`, `INVALID`, `NOT_APPLICABLE`, `STALE`), chống rò rỉ thời gian (temporal leakage), gán nhãn `DataCompletenessLevel` (`FULL`, `PARTIAL`, `INSUFFICIENT`).
+     - Bước 6: Đánh giá đồng thời 13 luật hard-trigger.
+     - Bước 7: Gộp nguyên nhân theo khóa tương quan `(studentId, ruleCode, scopeId, termId)` và cửa sổ cooldown.
+     - Bước 8: Xác định severity cuối cùng của Alert = `max(severity)`.
+     - Bước 9: Tạo/cập nhật `Alert` với ràng buộc bất biến **`Alert.isReferenceOnly = true`** (hỗ trợ dry-run an toàn không ghi CSDL).
+     - Bước 10: Xếp hàng thông báo gửi tới cán bộ.
+   - Core RiskScore service tại [src/modules/rule-engine/services/risk-score.service.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/risk-score.service.ts).
 
-3. **Xây dựng Orchestrator 10 Bước Chuẩn:**
-   - Triển khai pipeline chuẩn 10 bước theo dạng pure orchestrator, có logging chi tiết từng bước.
-   - Công thức tính `RiskScore`: chuẩn hóa trọng số (renormalize) theo `DataStatus` (`AVAILABLE`), xử lý missing-data policy và chống rò rỉ thời gian (temporal leakage).
-   - Gộp nguyên nhân theo khóa tương quan và tính `max(severity)`.
+4. **Data Fetcher & Persistence Service:**
+   - [src/modules/rule-engine/services/data-fetcher.service.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/data-fetcher.service.ts): Đọc dữ liệu từ Prisma, ánh xạ sang cấu trúc evaluator input, truy vấn thông tin ngoại lệ lịch, bảo trì LMS, trạng thái lớp và điểm danh.
+   - [src/modules/rule-engine/services/persistence.service.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/persistence.service.ts): Lưu nhật ký `RiskScoreLog`, `RuleTrigger`, tạo mới hoặc cập nhật `Alert` (tăng `reopenCount`, cập nhật `lastDetectedAt`), bỏ qua lưu trữ an toàn khi `dryRun = true`.
 
-4. **Background Jobs BullMQ:**
-   - Hoàn thiện xử lý trong `calculate-risk-score` và `evaluate-hard-triggers` theo lô `Enrollment`.
+5. **Server Actions & Phân quyền RBAC:**
+   - Quản lý phiên bản luật ([src/modules/rule-engine/actions/rule-version.action.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/actions/rule-version.action.ts)):
+     - `listRules`: Xem danh sách và lịch sử phiên bản luật theo nhóm.
+     - `createRuleVersion`: Tạo phiên bản nháp (`DRAFT`), tự động tăng số version, kiểm định schema condition qua Zod.
+     - `activateRuleVersion`: Kích hoạt phiên bản luật, **bắt buộc `approvedBy` khác null**, thực thi nghiêm ngặt nguyên tắc tách quyền (người tạo không được tự duyệt phiên bản của chính mình).
+     - `archiveRuleVersion`: Chuyển phiên bản cũ sang `ARCHIVED` khi có phiên bản mới kích hoạt.
+   - Đánh giá rủi ro ([src/modules/rule-engine/actions/evaluation.action.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/actions/evaluation.action.ts)):
+     - `runEvaluation`: Chạy đánh giá cho danh sách sinh viên hoặc học kỳ, hỗ trợ cờ `dryRun` (thử nghiệm không ghi DB), ghi nhận Audit Log (`DRY_RUN_EVALUATION` / `RUN_EVALUATION`).
+     - `queueEvaluationBatch`: Đẩy tác vụ đánh giá vào hàng đợi BullMQ khi cần xử lý số lượng lớn.
+     - Phân quyền: Chỉ `TRAINING_OFFICER` và `ADMIN` được thực thi.
 
-5. **Giao diện Admin Cấu hình Luật:**
-   - Quản lý vòng đời `RuleVersion`: tạo nháp (`DRAFT`), thử nghiệm (`TESTING`), kích hoạt (`ACTIVE`), lưu trữ (`ARCHIVED`).
-   - Tách quyền tạo nháp vs duyệt (`approvedBy`).
+6. **BullMQ Worker Xử lý Nền:**
+   - Cài đặt tại [src/workers/evaluate-hard-triggers.worker.ts](file:///e:/CTUT-EWARS/src/workers/evaluate-hard-triggers.worker.ts): Phân tách sinh viên theo lô 10 SV/batch, cập nhật tiến độ `job.updateProgress()`, tích hợp trực tiếp vào worker runner chính tại [src/workers/index.ts](file:///e:/CTUT-EWARS/src/workers/index.ts).
 
-6. **Kiểm thử Toàn diện (Coverage ≥ 90%):**
-   - Áp dụng skill `rule-engine-test-suite` phủ ma trận kiểm thử bắt buộc: điều kiện biên, ngoại lệ, thiếu dữ liệu, chống rò rỉ thời gian.
+7. **Seed Dữ liệu Luật Chuẩn:**
+   - Cài đặt tại [src/modules/rule-engine/services/seed-rules.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/services/seed-rules.ts): Tự động nạp 13 Rule và 13 RuleVersion v1 ở trạng thái `ACTIVE` với cấu hình ngưỡng chuẩn từ catalog.
+
+8. **Đảm bảo Chất lượng & Kiểm thử (105/105 tests pass toàn dự án):**
+   - Bộ test chuyên sâu [src/modules/rule-engine/__tests__/evaluators.test.ts](file:///e:/CTUT-EWARS/src/modules/rule-engine/__tests__/evaluators.test.ts) gồm 53 tests phủ đầy đủ ma trận:
+     - 10 tests cho HR-EXC (sinh viên rút môn, lớp chưa bắt đầu, miễn LMS, ngày lễ, bảo trì LMS, gia hạn bài tập, miễn bài tập).
+     - 6 tests cho HR-ATT-01 (vắng liên tiếp, hủy buổi, vắng có phép, chống temporal leakage).
+     - 2 tests cho HR-ATT-02 (ngưỡng cấm thi, toán tử `>=` vs `>`).
+     - 2 tests cho HR-ATT-03 (vắng đa môn đồng thời trong sliding window 7 ngày).
+     - 3 tests cho HR-ATT-04 (vắng đầu kỳ, ngoại lệ đăng ký muộn, đã đi học ít nhất 1 buổi).
+     - 3 tests cho HR-ACA-01 (điểm liệt bài quan trọng, bỏ qua bài DRAFT, bài trọng số nhỏ).
+     - 2 tests cho HR-ACA-02 (tiệm cận ngưỡng cảnh báo học vụ, kiểm tra số tín chỉ tích lũy tối thiểu).
+     - 2 tests cho HR-ACA-03 (sụt giảm GPA cuối kỳ, sụt giảm điểm thành phần trong kỳ).
+     - 2 tests cho HR-ACA-04 (học lại ≥3 lần do rớt môn, không áp dụng cho cải thiện điểm).
+     - 2 tests cho HR-LMS-01 (không tương tác ≥14 ngày kèm bỏ deadline, có hoạt động gần đây).
+     - 2 tests cho HR-LMS-02 (bỏ nộp bài bắt buộc liên tiếp, có nộp 1 bài).
+     - 1 test cho HR-LMS-03 (2 bài tự chấm 0 điểm liên tiếp).
+     - 2 tests cho HR-COMB-01 (tín hiệu tiêu cực đa nguồn đồng thời ≥2/3 nguồn).
+     - 4 tests cho HR-COMB-02 (biến mất hoàn toàn ≥10 ngày, có hoạt động, ngoại lệ).
+     - 4 tests cho RiskScore Calculator (FULL, PARTIAL renormalize, INSUFFICIENT với điểm NULL, NOT_APPLICABLE).
+     - 2 tests tích hợp Pipeline 10 bước (thứ tự bước, chế độ dry-run không persist DB).
+     - 4 tests cho Zod Condition Validators (validate condition, apply default, từ chối ruleCode lạ).
+   - Kiểm tra tĩnh: TypeScript `strict: true` (0 lỗi `tsc --noEmit`), ESLint (0 errors, 0 warnings).
+   - Đạt 100% Definition of Done Phase 3.
+
+---
+
+## 10. Kế hoạch Tiếp theo (Phase 4 — Module `alerts`)
+
+Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 4 — Module `alerts`**:
+
+1. **Vòng đời Trạng thái Alert (Skill `alert-lifecycle-transition`):**
+   - Cài đặt Server Actions chuyển trạng thái: `acknowledgeAlert`, `resolveAlert`, `dismissAlert`, `reopenAlert`.
+   - Ràng buộc: Khi resolve/dismiss bắt buộc có lý do và ghi nhận `Intervention`.
+
+2. **Gửi Thông báo & Chống Trùng (Skill `notification-dispatch`):**
+   - BullMQ queue `send-notifications`.
+   - Cơ chế `dedupKey` và chống dội tin (debounce window) theo mức độ nghiêm trọng: `CRITICAL` gửi ngay (debounce 24h), `HIGH` (48h), `MEDIUM`/`LOW` tổng hợp digest hàng tuần.
+
+3. **Giao diện Cố vấn Học tập (CVHT):**
+   - Danh sách cảnh báo cần xử lý (mặc định lọc `OPEN` và `ACKNOWLEDGED`).
+   - Accordion chi tiết nguyên nhân, hiển thị bằng chứng `RuleTrigger`.
+   - Form ghi nhận can thiệp (`Intervention`) trong Sheet/Dialog đạt mục tiêu luồng ≤2 click.
+
+4. **Giao diện Sinh viên:**
+   - Trang tổng quan ngôn ngữ tích cực (không dùng từ "rủi ro" làm tiêu đề chính, không hiển thị JSON snapshot thô).
+   - Hỗ trợ nút liên hệ nhanh với CVHT phụ trách.

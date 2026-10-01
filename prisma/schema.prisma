@@ -88,6 +88,13 @@ model User {
   deadlineExtensions   LMSDeadlineExtension[]   @relation("DeadlineExtensionGrantor")
   assignmentExemptions LMSAssignmentExemption[] @relation("AssignmentExemptionGrantor")
 
+  // Phase 3 relations
+  configuredRuleVersions RuleVersion[]  @relation("RuleVersionConfigurator")
+  approvedRuleVersions   RuleVersion[]  @relation("RuleVersionApprover")
+  assignedAlerts         Alert[]        @relation("AlertAssignedAdvisor")
+  interventions          Intervention[]
+  notifications          Notification[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -108,6 +115,11 @@ model Student {
   deadlineExtensions   LMSDeadlineExtension[]
   assignmentExemptions LMSAssignmentExemption[]
 
+  // Phase 3 relations
+  ruleTriggers  RuleTrigger[]
+  riskScoreLogs RiskScoreLog[]
+  alerts        Alert[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -120,6 +132,11 @@ model Term {
   endDate      DateTime
 
   courseSections CourseSection[]
+
+  // Phase 3 relations
+  ruleTriggers  RuleTrigger[]
+  riskScoreLogs RiskScoreLog[]
+  alerts        Alert[]
 }
 
 model Course {
@@ -479,4 +496,205 @@ model LMSMaintenanceWindow {
   startAt     DateTime
   endAt       DateTime
   description String?  @db.Text
+}
+
+// ==========================================
+// 7. ENUMS — RULE ENGINE & ALERTS (11-data-schema-rule-engine.md)
+// ==========================================
+
+enum RuleGroup {
+  ATTENDANCE
+  ACADEMIC
+  LMS
+  COMBINED
+  EXCEPTION
+}
+
+enum RuleStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  DISMISSED
+  INVALIDATED
+  REOPENED
+}
+
+enum InterventionType {
+  EMAIL
+  PHONE_CALL
+  IN_PERSON_MEETING
+  ACADEMIC_PLAN
+  REFERRAL
+  OTHER
+}
+
+enum ConfidentialityLevel {
+  NORMAL
+  SENSITIVE
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+  SMS
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  SUPPRESSED_DUPLICATE
+}
+
+enum DataCompletenessLevel {
+  FULL
+  PARTIAL
+  INSUFFICIENT
+}
+
+// ==========================================
+// 8. RULE ENGINE & ALERTS (11-data-schema-rule-engine.md)
+// ==========================================
+
+model Rule {
+  ruleCode  String     @id @db.VarChar(20)
+  ruleName  String     @db.VarChar(100)
+  ruleGroup RuleGroup
+  scope     String     @db.VarChar(30)
+  priority  Int
+  cooldown  Int
+  status    RuleStatus
+
+  versions     RuleVersion[]
+  ruleTriggers RuleTrigger[]
+}
+
+model RuleVersion {
+  id            String     @id @default(uuid())
+  ruleCode      String     @db.VarChar(20)
+  version       Int
+  /// validate bằng Zod, xem RuleVersionConditionSchema
+  condition     Json
+  severity      Severity
+  /// validate bằng Zod, xem RuleVersionActionSchema
+  action        Json
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  status        RuleStatus
+  configuredBy  String     @db.VarChar(20)
+  approvedBy    String?    @db.VarChar(20)
+
+  rule          Rule           @relation(fields: [ruleCode], references: [ruleCode])
+  configurator  User           @relation("RuleVersionConfigurator", fields: [configuredBy], references: [userId])
+  approver      User?          @relation("RuleVersionApprover", fields: [approvedBy], references: [userId])
+  ruleTriggers  RuleTrigger[]
+  riskScoreLogs RiskScoreLog[]
+
+  @@unique([ruleCode, version])
+}
+
+model RuleTrigger {
+  id            String   @id @default(uuid())
+  alertId       String
+  ruleCode      String   @db.VarChar(20)
+  ruleVersionId String
+  studentId     String   @db.VarChar(20)
+  scopeId       String   @db.VarChar(20)
+  termId        String   @db.VarChar(10)
+  triggeredAt   DateTime
+  /// validate bằng Zod, xem TriggerInputSnapshotSchema
+  inputSnapshot Json
+  reason        String   @db.Text
+  severity      Severity
+
+  alert       Alert       @relation(fields: [alertId], references: [alertId])
+  rule        Rule        @relation(fields: [ruleCode], references: [ruleCode])
+  ruleVersion RuleVersion @relation(fields: [ruleVersionId], references: [id])
+  student     Student     @relation(fields: [studentId], references: [studentId])
+  term        Term        @relation(fields: [termId], references: [termId])
+}
+
+model RiskScoreLog {
+  id                    String                @id @default(uuid())
+  studentId             String                @db.VarChar(20)
+  termId                String                @db.VarChar(10)
+  riskScoreValue        Float?
+  dataCompletenessLevel DataCompletenessLevel
+  /// validate bằng Zod, xem ComponentsUsedSchema
+  componentsUsed        Json
+  ruleVersionId         String
+  calculatedAt          DateTime
+
+  student     Student     @relation(fields: [studentId], references: [studentId])
+  term        Term        @relation(fields: [termId], references: [termId])
+  ruleVersion RuleVersion @relation(fields: [ruleVersionId], references: [id])
+  alerts      Alert[]
+}
+
+model Alert {
+  alertId           String      @id @default(uuid())
+  studentId         String      @db.VarChar(20)
+  termId            String      @db.VarChar(10)
+  severity          Severity
+  status            AlertStatus
+  firstDetectedAt   DateTime
+  lastDetectedAt    DateTime
+  assignedAdvisorId String      @db.VarChar(20)
+  riskScoreLogId    String?
+  isReferenceOnly   Boolean     @default(true)
+
+  student         Student        @relation(fields: [studentId], references: [studentId])
+  term            Term           @relation(fields: [termId], references: [termId])
+  assignedAdvisor User           @relation("AlertAssignedAdvisor", fields: [assignedAdvisorId], references: [userId])
+  riskScoreLog    RiskScoreLog?  @relation(fields: [riskScoreLogId], references: [id])
+  ruleTriggers    RuleTrigger[]
+  interventions   Intervention[]
+  notifications   Notification[]
+}
+
+model Intervention {
+  interventionId       String               @id @default(uuid())
+  alertId              String
+  performedBy          String               @db.VarChar(20)
+  type                 InterventionType
+  content              String               @db.Text
+  performedAt          DateTime
+  outcome              String?              @db.Text
+  nextFollowUpAt       DateTime?
+  status               String               @db.VarChar(20)
+  confidentialityLevel ConfidentialityLevel
+
+  alert     Alert @relation(fields: [alertId], references: [alertId])
+  performer User  @relation(fields: [performedBy], references: [userId])
+}
+
+model Notification {
+  notificationId String              @id @default(uuid())
+  alertId        String
+  recipientId    String              @db.VarChar(20)
+  channel        NotificationChannel
+  dedupKey       String              @db.VarChar(100)
+  status         NotificationStatus
+  sentAt         DateTime?
+  createdAt      DateTime            @default(now())
+
+  alert     Alert @relation(fields: [alertId], references: [alertId])
+  recipient User  @relation(fields: [recipientId], references: [userId])
+
+  @@index([dedupKey, createdAt])
 }

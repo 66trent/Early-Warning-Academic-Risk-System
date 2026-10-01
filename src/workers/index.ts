@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import { QUEUE_NAMES, redisConnection } from "../lib/queue";
 import { syncLmsWorker } from "./sync-lms.worker";
+import { processEvaluationJob } from "./evaluate-hard-triggers.worker";
 
 console.log("🚀 Starting CTUET-EWARS BullMQ Worker...");
 
@@ -8,6 +9,8 @@ const calculateRiskScoreWorker = new Worker(
   QUEUE_NAMES.CALCULATE_RISK_SCORE,
   async (job) => {
     console.log(`[calculate-risk-score] Processing job ${job.id}`);
+    // RiskScore is calculated inline within the evaluation pipeline (Step 5)
+    // This worker is reserved for standalone risk score recalculation if needed
     return { success: true };
   },
   { connection: redisConnection, concurrency: 5 }
@@ -15,18 +18,17 @@ const calculateRiskScoreWorker = new Worker(
 
 const evaluateHardTriggersWorker = new Worker(
   QUEUE_NAMES.EVALUATE_HARD_TRIGGERS,
-  async (job) => {
-    console.log(`[evaluate-hard-triggers] Processing job ${job.id}`);
-    return { success: true };
-  },
-  { connection: redisConnection, concurrency: 5 }
+  processEvaluationJob,
+  { connection: redisConnection, concurrency: 3 }
 );
 
 const sendNotificationsWorker = new Worker(
   QUEUE_NAMES.SEND_NOTIFICATIONS,
   async (job) => {
-    console.log(`[send-notifications] Processing job ${job.id}`);
-    return { success: true };
+    console.log(`[send-notifications] Processing job ${job.id}`, job.data);
+    // TODO: Phase 4 — implement actual notification dispatch (email/in-app)
+    // For now, log the notification intent
+    return { success: true, notified: true };
   },
   { connection: redisConnection, concurrency: 5 }
 );
