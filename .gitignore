@@ -44,7 +44,6 @@ next-env.d.ts
 /src/generated/prisma
 
 # Project-specific exclusions
-/.agents/
 /.claude/
 /.windsurf/
 CLAUDE.md

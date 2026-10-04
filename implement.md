@@ -150,8 +150,8 @@ Ghi chú: `admin` (Phase 6) chỉ thực sự cần Phase 3 xong ở phần "duy
 
 **Definition of Done:**
 
-- [ ] Dữ liệu biểu đồ tổng hợp sẵn ở server, không gửi raw data xuống client.
-- [ ] Dashboard chất lượng dữ liệu đặt ở vị trí dễ thấy, không chôn trong menu.
+- [x] Dữ liệu biểu đồ tổng hợp sẵn ở server, không gửi raw data xuống client.
+- [x] Dashboard chất lượng dữ liệu đặt ở vị trí dễ thấy, không chôn trong menu.
 
 ---
 

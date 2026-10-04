@@ -1,6 +1,6 @@
-# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Hiện trạng Triển khai (Phase 0, 1, 2, 3, 4)
+# CTUET-EWARS — Tổng kết Bối cảnh Dự án & Hiện trạng Triển khai (Phase 0, 1, 2, 3, 4, 5)
 
-> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong các phiên làm việc (Phase 0: Bootstrap Infra, Phase 1: Identity & Catalog, Phase 2: Module Data Import, Phase 3: Module Rule Engine, Phase 4: Alerts & Notifications). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo (Phase 5: Dashboard & Phase 6: Admin).
+> **Mục đích tài liệu:** Lưu trữ toàn bộ ngữ cảnh, kiến trúc, mô hình dữ liệu và các bước đã triển khai trong các phiên làm việc (Phase 0: Bootstrap Infra, Phase 1: Identity & Catalog, Phase 2: Module Data Import, Phase 3: Module Rule Engine, Phase 4: Alerts & Notifications, Phase 5: Dashboard & Báo cáo). Khi mở một phiên chat mới, agent chỉ cần đọc file này là có thể nắm trọn vẹn hiện trạng dự án để tiếp tục triển khai các phase tiếp theo (Phase 6: Admin).
 
 ---
 
@@ -355,15 +355,55 @@ Mọi bảng dữ liệu nguồn (điểm danh, điểm số, bài tập LMS, lo
 
 ---
 
-## 11. Kế hoạch Tiếp theo (Phase 5 — Module `dashboard` & Admin)
+## 11. Những Việc Đã Hoàn Thành Trong Phase 5 (Module `dashboard`)
 
-Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 5 — Module `dashboard` & `admin`**:
+1. **Kiến trúc & Validators (Zod v4):**
+   - Viết [dashboard.schema.ts](file:///e:/CTUT-EWARS/src/modules/dashboard/validators/dashboard.schema.ts): Schemas cho các bộ lọc `dashboardOverviewFilterSchema`, `riskScoreTrendFilterSchema` (default 30 ngày, min 1, max 365), `dataQualityFilterSchema`, `atRiskStudentListFilterSchema` (phân trang page, pageSize ≤ 100), `exportReportFilterSchema` (yêu cầu `termId`, format `csv` hoặc `json`).
 
-1. **Dashboard Phân tích Tổng quan (Sử dụng Tremor):**
-   - Xây dựng biểu đồ trực quan hóa mức phân bố `RiskScoreLog`.
-   - Báo cáo số lượng Alert theo nhóm nguyên nhân (LMS, Điểm danh, Học lực).
-2. **Theo dõi Chất lượng Dữ liệu (Data Completeness):**
-   - Theo dõi phần trăm dữ liệu `MISSING`, `INVALID` và tình trạng cập nhật (STALE) của dữ liệu tải lên.
-3. **Giao diện Quản trị Viên (Admin Panel) & Phê duyệt Luật:**
-   - Xây dựng UI danh sách và quản lý `User` cùng cấu hình phạm vi `scopeConfig` cho phòng đào tạo (QLĐT).
-   - Luồng phê duyệt (Approve) `RuleVersion` cho QLĐT, đảm bảo người tạo luật không tự kích hoạt (activate).
+2. **Core Service & Tổng hợp Sẵn ở Server (DoD Phase 5):**
+   - Cài đặt tại [dashboard.service.ts](file:///e:/CTUT-EWARS/src/modules/dashboard/services/dashboard.service.ts):
+     - `getDashboardOverview`: Tổng hợp sẵn số lượng sinh viên, active alerts, phân bố theo 4 mức Severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`), phân bố theo trạng thái Alert, số cảnh báo đã giải quyết trong 7 ngày, thời gian phản hồi trung bình (tính từ `firstDetectedAt` đến `Intervention` đầu tiên), và phân bố cảnh báo theo 5 nhóm luật `RuleGroup` (`ATTENDANCE`, `ACADEMIC`, `LMS`, `COMBINED`, `EXCEPTION`).
+     - `getRiskScoreTrend`: Tổng hợp nhật ký `RiskScoreLog` theo từng ngày, tính điểm rủi ro trung bình hàng ngày và số lượng sinh viên theo từng mức `DataCompletenessLevel` (`FULL`, `PARTIAL`, `INSUFFICIENT`).
+     - `getDataQualityMetrics`: Tính tỷ lệ lỗi import (`importErrorRate`), số sinh viên bị `INSUFFICIENT` (`insufficientStudentCount`), số giờ trôi qua kể từ lần đồng bộ cuối (`syncAgeHours`), độ trễ xử lý trung bình (`avgSyncDelayHours`), phân bố trạng thái `ImportBatch` và phân bố lý do lỗi `ImportErrorRow`.
+     - `getAtRiskStudentList`: Truy vấn danh sách sinh viên nguy cơ, **bắt buộc sắp xếp CRITICAL trên cùng** theo [03-ui-design.md](file:///e:/CTUT-EWARS/.agents/rules/03-ui-design.md), phân trang an toàn, kèm nguồn gốc kích hoạt luật và số lần can thiệp.
+     - `exportReport`: Xuất báo cáo theo lớp/khoa/học kỳ hỗ trợ định dạng JSON và CSV có UTF-8 BOM chuẩn hiển thị tiếng Việt trên Microsoft Excel.
+     - `getFilterOptions`: Lấy danh sách học kỳ, khoa, lớp phục vụ bộ lọc.
+
+3. **Server Actions & Phân quyền RBAC (Skill `scaffold-server-action`):**
+   - Cài đặt tại [dashboard.action.ts](file:///e:/CTUT-EWARS/src/modules/dashboard/actions/dashboard.action.ts):
+     - Helper `requireDashboardAccess()` thực thi RBAC: Chỉ `TRAINING_OFFICER` và `ADMIN` được truy cập, chặn hoàn toàn `STUDENT` và `ADVISOR`.
+     - Kiểm tra phạm vi dữ liệu theo khoa (`assertScope`) khi có filter `departmentId`.
+     - Ghi nhận Audit Log bắt buộc (`writeAuditLog`) khi xuất báo cáo (`EXPORT_REPORT`).
+
+4. **Route Handler Xuất CSV Stream:**
+   - Cài đặt tại [src/app/api/dashboard/export/route.ts](file:///e:/CTUT-EWARS/src/app/api/dashboard/export/route.ts): Kiểm tra phiên đăng nhập, vai trò `TRAINING_OFFICER`/`ADMIN`, ghi Audit Log (`EXPORT_REPORT_CSV`), trả về file attachment `.csv` với header `Content-Type: text/csv; charset=utf-8` và mã hóa BOM UTF-8.
+
+5. **Giao diện Người dùng UI/UX Pro Max:**
+   - **Main Dashboard Page ([page.tsx](file:///e:/CTUT-EWARS/src/app/dashboard/page.tsx)):** Server Component tải song song toàn bộ dữ liệu tổng hợp ở server (đáp ứng 100% DoD Phase 5). Có disclaimer tham khảo bắt buộc theo `03-ui-design.md`.
+   - **Dashboard Chất lượng Dữ liệu ([data-quality-dashboard.tsx](file:///e:/CTUT-EWARS/src/app/dashboard/components/data-quality-dashboard.tsx)):** Đặt ở vị trí nổi bật nhất ngay đầu trang (DoD Phase 5), sử dụng bảng màu xanh dương/xám (tách biệt hoàn toàn với màu Severity). Hiển thị tỷ lệ lỗi, số SV `INSUFFICIENT`, thời gian đồng bộ cuối và phân bố trạng thái batch.
+   - **Thẻ KPI & Phân bố ([kpi-cards.tsx](file:///e:/CTUT-EWARS/src/app/dashboard/components/kpi-cards.tsx)):** Dùng shadcn Card + Tailwind CSS với bảng màu chuẩn (Đỏ: `CRITICAL`, Cam: `HIGH`, Hổ phách: `MEDIUM`, Xám: `LOW`).
+   - **Biểu đồ Trực quan Recharts ([dashboard-charts.tsx](file:///e:/CTUT-EWARS/src/app/dashboard/components/dashboard-charts.tsx)):** Thay thế Tremor do Tremor chưa hỗ trợ React 19. Bao gồm: Bar Chart phân bố nhóm luật, Donut/Pie Chart trạng thái xử lý cảnh báo, Area Chart xu hướng RiskScore, và Stacked Area Chart hoàn thiện dữ liệu `FULL`/`PARTIAL`/`INSUFFICIENT`.
+   - **Bảng Sinh viên Nguy cơ ([at-risk-student-table.tsx](file:///e:/CTUT-EWARS/src/app/dashboard/components/at-risk-student-table.tsx)):** Sắp xếp `CRITICAL` trên cùng, **RiskScore luôn gắn kèm badge DataCompletenessLevel**, bộ lọc realtime (Học kỳ, Khoa, Lớp, Mức độ), phân trang và nút xuất CSV trực tiếp.
+
+6. **Đảm bảo Chất lượng & Kiểm thử (166/166 tests pass toàn dự án):**
+   - [src/modules/dashboard/__tests__/dashboard.test.ts](file:///e:/CTUT-EWARS/src/modules/dashboard/__tests__/dashboard.test.ts): 21 tests kiểm tra validators, aggregations của service, tính toán tỷ lệ lỗi, sắp xếp CRITICAL trên cùng, sinh CSV UTF-8 BOM.
+   - [src/modules/dashboard/__tests__/dashboard.action.test.ts](file:///e:/CTUT-EWARS/src/modules/dashboard/__tests__/dashboard.action.test.ts): 13 tests kiểm tra RBAC 4 vai trò, kiểm tra scope khoa, audit log khi xuất báo cáo, route handler GET `/api/dashboard/export`.
+   - Kiểm tra tĩnh: TypeScript `strict: true` (0 lỗi), ESLint (0 errors, 0 warnings).
+   - Đạt 100% Definition of Done Phase 5.
+
+---
+
+## 12. Kế hoạch Tiếp theo (Phase 6 — Module `admin`)
+
+Khi bắt đầu phiên làm việc tiếp theo, thực hiện **Phase 6 — Module `admin`**:
+
+1. **CRUD Tài khoản Người dùng & Gán `scopeConfig`:**
+   - Quản lý danh sách tài khoản theo 4 vai trò (`STUDENT`, `ADVISOR`, `TRAINING_OFFICER`, `ADMIN`).
+   - Cấu hình phạm vi truy cập dữ liệu `scopeConfig` (khoa, viện, toàn trường) cho Cán bộ Đào tạo và CVHT.
+2. **Cấu hình Kết nối Tích hợp LMS / SIS:**
+   - Quản trị thông số kết nối API tới hệ thống SIS (Student Information System) và Moodle/Canvas LMS.
+3. **Trang Xem Audit Log (Append-only):**
+   - Giao diện tra cứu nhật ký kiểm toán hệ thống (chỉ đọc, lọc theo actor, hành động, thực thể, thời gian). Không có API/action nào cho phép sửa/xóa audit log.
+4. **Quy trình Phê duyệt Phiên bản Luật (`RuleVersion`):**
+   - Giao diện duyệt luật cho QLĐT: thiết lập `approvedBy`, thực thi nghiêm ngặt nguyên tắc Separation of Duties (người soạn thảo luật không được tự duyệt phiên bản của chính mình).
+
