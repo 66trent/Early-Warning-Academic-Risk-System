@@ -43,8 +43,11 @@ next-env.d.ts
 
 /src/generated/prisma
 
-# Project-specific exclusions
+# Project-specific exclusions & AI agent metadata
+/.agents/
 /.claude/
 /.windsurf/
+/section/
+implement.md
 CLAUDE.md
 skills-lock.json
