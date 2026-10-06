@@ -10,6 +10,7 @@ import {
   BookOpen,
   LogOut,
   HeartHandshake,
+  ShieldCheck,
 } from "lucide-react";
 
 export default async function StudentAlertsPage() {
@@ -251,6 +252,19 @@ export default async function StudentAlertsPage() {
             )}
           </div>
         </div>
+
+        {/* Footer Link Pháp lý */}
+        <footer className="pt-4 text-center text-xs text-neutral-500">
+          <Link
+            href="/legal/privacy-policy"
+            className="inline-flex min-h-[44px] items-center gap-1.5 font-medium text-blue-600 transition hover:underline dark:text-blue-400"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>
+              Quy chế bảo vệ dữ liệu cá nhân sinh viên theo Luật 91/2025/QH15 & NĐ 356/2025/NĐ-CP
+            </span>
+          </Link>
+        </footer>
       </main>
     </div>
   );

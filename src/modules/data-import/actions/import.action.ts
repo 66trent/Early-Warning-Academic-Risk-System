@@ -55,6 +55,15 @@ export async function uploadImportFile(formData: FormData) {
     return { success: false, error: "Vui lòng chọn file để nhập." };
   }
 
+  // 06-security.md DoS protection: giới hạn dung lượng file tối đa 20MB
+  const MAX_FILE_SIZE = 20 * 1024 * 1024;
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      success: false,
+      error: "Kích thước file vượt quá giới hạn tối đa cho phép (20MB).",
+    };
+  }
+
   try {
     const csvContent = await file.text();
     const fileBuffer = Buffer.from(csvContent, "utf-8");

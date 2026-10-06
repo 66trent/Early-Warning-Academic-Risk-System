@@ -179,6 +179,21 @@ export default async function DashboardPage() {
             exportTermId={filterOptions.terms[0]?.value}
           />
         </section>
+
+        {/* Footer */}
+        <footer className="border-t border-neutral-200 py-6 text-center text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
+          <div className="flex flex-col items-center justify-center gap-2 sm:flex-row sm:gap-4">
+            <span>CTUET-EWARS Dashboard Quản lý Đào tạo</span>
+            <span className="hidden sm:inline">•</span>
+            <Link
+              href="/legal/privacy-policy"
+              className="inline-flex min-h-[44px] items-center gap-1 font-semibold text-blue-600 transition hover:underline dark:text-blue-400"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Chính sách bảo vệ dữ liệu cá nhân (Luật 91/2025/QH15)
+            </Link>
+          </div>
+        </footer>
       </main>
     </div>
   );

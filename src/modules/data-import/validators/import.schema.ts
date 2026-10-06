@@ -72,6 +72,12 @@ export const lmsEventRowSchema = z.object({
 // Action-level schemas
 // ==========================================
 
+export const MAX_IMPORT_FILE_SIZE = 20 * 1024 * 1024; // 20MB theo 06-security.md
+
+export function validateImportFileSize(fileSizeBytes: number): boolean {
+  return fileSizeBytes <= MAX_IMPORT_FILE_SIZE;
+}
+
 export const uploadFileSchema = z.object({
   dataType: z.enum(["ATTENDANCE", "ASSESSMENT", "LMS_ASSIGNMENT", "LMS_SUBMISSION", "LMS_EVENT"]),
   parentBatchId: z.string().uuid().nullable().optional(),

@@ -482,6 +482,8 @@ model ImportErrorRow {
   resolved        Boolean           @default(false)
 
   importBatch ImportBatch @relation(fields: [importBatchId], references: [id])
+
+  @@index([importBatchId, resolved])
 }
 
 model AcademicCalendarException {
@@ -627,6 +629,9 @@ model RuleTrigger {
   ruleVersion RuleVersion @relation(fields: [ruleVersionId], references: [id])
   student     Student     @relation(fields: [studentId], references: [studentId])
   term        Term        @relation(fields: [termId], references: [termId])
+
+  @@index([termId, ruleCode])
+  @@index([studentId, termId])
 }
 
 model RiskScoreLog {
@@ -644,6 +649,8 @@ model RiskScoreLog {
   term        Term        @relation(fields: [termId], references: [termId])
   ruleVersion RuleVersion @relation(fields: [ruleVersionId], references: [id])
   alerts      Alert[]
+
+  @@index([studentId, termId, calculatedAt])
 }
 
 model Alert {
@@ -665,6 +672,10 @@ model Alert {
   ruleTriggers    RuleTrigger[]
   interventions   Intervention[]
   notifications   Notification[]
+
+  @@index([studentId, termId, status])
+  @@index([termId, severity, status])
+  @@index([assignedAdvisorId, status])
 }
 
 model Intervention {

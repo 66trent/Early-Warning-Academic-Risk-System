@@ -21,6 +21,12 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "overrides": {
+    "decode-uri-component": "^0.5.0",
+    "stream-json": "^3.7.0",
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.24.5"
+  },
   "lint-staged": {
     "src/**/*.{js,jsx,ts,tsx}": [
       "prettier --write",

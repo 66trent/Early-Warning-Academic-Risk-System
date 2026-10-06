@@ -151,9 +151,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* Footer */}
       <footer className="border-t border-neutral-200 bg-white py-4 text-center text-xs text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 sm:flex-row">
-          <span>
-            CTUET-EWARS Quản trị Hệ thống • Tuân thủ Luật Bảo vệ Dữ liệu Cá nhân số 91/2025/QH15
-          </span>
+          <Link
+            href="/legal/privacy-policy"
+            className="inline-flex min-h-[44px] items-center gap-1.5 font-medium text-indigo-600 transition hover:underline dark:text-indigo-400"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>
+              CTUET-EWARS Quản trị Hệ thống • Tuân thủ Luật Bảo vệ Dữ liệu Cá nhân số 91/2025/QH15
+            </span>
+          </Link>
           <span className="font-mono text-[11px] text-neutral-400">
             STRIDE Hardened • Append-only Audit
           </span>
