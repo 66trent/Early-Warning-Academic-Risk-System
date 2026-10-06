@@ -1,3 +1,6 @@
+import { prisma } from "./prisma";
+import type { Prisma } from "@/generated/prisma/client";
+
 export interface AuditLogPayload {
   actorId: string;
   actorRole: string;
@@ -19,6 +22,25 @@ export async function writeAuditLog(payload: AuditLogPayload): Promise<void> {
     timestamp: new Date().toISOString(),
   };
 
-  // Trong Phase 0, ghi log ra structured logger trước khi có bảng AuditLog ở các Phase sau
+  // Structured logger cho giám sát log tập trung
   console.info("[AUDIT_LOG]", JSON.stringify(logEntry));
+
+  try {
+    if (prisma?.auditLog) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: payload.actorId,
+          actorRole: payload.actorRole,
+          action: payload.action,
+          targetEntity: payload.targetEntity,
+          targetId: payload.targetId,
+          details: payload.details ? (payload.details as Prisma.InputJsonValue) : undefined,
+          ipAddress: payload.ipAddress,
+          userAgent: payload.userAgent,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[AUDIT_LOG_ERROR] Không thể ghi bản ghi kiểm toán vào CSDL:", err);
+  }
 }

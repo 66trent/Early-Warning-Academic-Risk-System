@@ -698,3 +698,40 @@ model Notification {
 
   @@index([dedupKey, createdAt])
 }
+
+// ==========================================
+// 9. AUDIT & SYSTEM INTEGRATIONS (Phase 6 Admin)
+// ==========================================
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String   @db.VarChar(50)
+  actorRole    String   @db.VarChar(50)
+  action       String   @db.VarChar(50)
+  targetEntity String   @db.VarChar(50)
+  targetId     String?  @db.VarChar(100)
+  details      Json?
+  ipAddress    String?  @db.VarChar(45)
+  userAgent    String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetEntity, createdAt])
+}
+
+model SystemIntegrationConfig {
+  id           String    @id @default(uuid())
+  systemType   String    @unique @db.VarChar(50)
+  name         String    @db.VarChar(100)
+  baseUrl      String    @db.VarChar(255)
+  apiKey       String?   @db.Text
+  apiSecret    String?   @db.Text
+  isEnabled    Boolean   @default(true)
+  syncSchedule String?   @db.VarChar(50)
+  lastSyncAt   DateTime?
+  configJson   Json?
+  updatedBy    String    @db.VarChar(50)
+  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime  @default(now())
+}
